@@ -117,6 +117,32 @@ Watch a random policy in an on-screen window:
 python examples/random_agent.py --render human
 ```
 
+## Vectorised environments
+
+`make_vec_env` creates a batch of environments that share the same
+`EnvConfig` and exposes the standard Gymnasium `VectorEnv` API:
+
+```python
+from panda3d_rl_sim import make_vec_env, EnvConfig
+
+# 8 envs, same process (fastest on single-core machines)
+venv = make_vec_env(8)
+
+# 8 envs in separate subprocesses — useful when env steps are slow
+venv = make_vec_env(8, async_envs=True)
+
+# With domain randomisation + multi-goal
+cfg = EnvConfig(num_goals=3, dr_num_obstacles=(2, 8), dr_max_speed=(2.0, 5.0))
+venv = make_vec_env(4, config=cfg)
+```
+
+A throughput benchmark is available in `examples/vec_rollout.py`:
+
+```bash
+python examples/vec_rollout.py --n-envs 4 --steps 5000
+python examples/vec_rollout.py --n-envs 4 --async-envs --steps 5000
+```
+
 ## Training a PPO policy
 
 A ready-to-run Stable-Baselines3 training script is shipped in
@@ -197,7 +223,7 @@ See [cpp/README.md](cpp/README.md) for details.
 - [ ] Bullet-backed rigid-body dynamics (slopes, friction, dynamic bodies)
 - [x] Multi-goal sequential navigation (`num_goals=N`; backward-compatible with single-goal default)
 - [x] Domain randomization hooks (num_obstacles, obstacle size, max_speed, max_turn_rate)
-- [ ] Vectorized `AsyncVectorEnv` support for parallel rollouts
+- [x] Vectorized `SyncVectorEnv` / `AsyncVectorEnv` support via `make_vec_env()`
 - [ ] Depth and segmentation sensor outputs
 - [x] Example Stable-Baselines3 PPO training config and pre-trained checkpoint
 
