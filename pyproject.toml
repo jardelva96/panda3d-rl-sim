@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "panda3d-rl-sim"
+version = "0.1.0"
+description = "Reinforcement-learning simulation environment built on the Panda3D 3D engine."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "Jardel Alves"}]
+keywords = ["panda3d", "reinforcement-learning", "simulation", "gymnasium", "3d"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Games/Entertainment :: Simulation",
+]
+dependencies = [
+    "panda3d>=1.10.13",
+    "gymnasium>=0.29",
+    "numpy>=1.23",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7",
+    "ruff>=0.5",
+]
+examples = [
+    "imageio>=2.30",
+]
+
+[project.urls]
+Homepage = "https://github.com/jardelva96/panda3d-rl-sim"
+Repository = "https://github.com/jardelva96/panda3d-rl-sim"
+Issues = "https://github.com/jardelva96/panda3d-rl-sim/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra -q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]

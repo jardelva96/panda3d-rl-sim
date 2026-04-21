@@ -1,0 +1,30 @@
+"""Configuration dataclass for :class:`panda3d_rl_sim.env.PandaNavEnv`."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+
+@dataclass
+class EnvConfig:
+    # World geometry
+    world_size: float = 10.0
+    goal_radius: float = 0.6
+    min_goal_distance: float = 3.0
+
+    # Rover dynamics
+    max_speed: float = 3.0
+    max_turn_rate: float = 2.5  # rad/s
+
+    # Simulation
+    dt: float = 1.0 / 20.0
+    max_steps: int = 300
+
+    # Rewards
+    reward_goal: float = 10.0
+    reward_out_of_bounds: float = -5.0
+    reward_step_penalty: float = -0.01
+
+    # Pixel observation / rgb_array render
+    pixel_width: int = 84
+    pixel_height: int = 84

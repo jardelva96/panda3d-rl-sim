@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+build/
+dist/
+.eggs/
+*.egg
+
+# Virtualenvs
+.venv/
+venv/
+env/
+
+# Pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Native artifacts
+*.so
+*.pyd
+*.dll
+cpp/build/
+cpp/_build/
+
+# Local output
+*.log
+*.mp4
+*.gif
