@@ -40,3 +40,11 @@ class EnvConfig:
     # Pixel observation / rgb_array render
     pixel_width: int = 84
     pixel_height: int = 84
+
+    # Domain randomisation — set (lo, hi) to enable per-episode sampling.
+    # When None the corresponding base value is used unchanged every episode.
+    # Sampled independently at every reset() call.
+    dr_num_obstacles: tuple[int, int] | None = None
+    dr_obstacle_half_extent: tuple[float, float] | None = None
+    dr_max_speed: tuple[float, float] | None = None
+    dr_max_turn_rate: tuple[float, float] | None = None

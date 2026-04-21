@@ -196,7 +196,7 @@ See [cpp/README.md](cpp/README.md) for details.
 - [x] LIDAR-like range sensor with optional C++ backend
 - [ ] Bullet-backed rigid-body dynamics (slopes, friction, dynamic bodies)
 - [ ] Multi-goal and procedurally generated room layouts
-- [ ] Domain randomization hooks (textures, lighting, mass, friction)
+- [x] Domain randomization hooks (num_obstacles, obstacle size, max_speed, max_turn_rate)
 - [ ] Vectorized `AsyncVectorEnv` support for parallel rollouts
 - [ ] Depth and segmentation sensor outputs
 - [x] Example Stable-Baselines3 PPO training config and pre-trained checkpoint

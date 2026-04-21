@@ -112,6 +112,12 @@ class World:
         self.obstacle_nps: list = []
         self.obstacles_aabb = np.zeros((0, 4), dtype=np.float32)
 
+        # Per-episode effective values; updated by reset() when DR is enabled.
+        self._ep_num_obstacles: int = config.num_obstacles
+        self._ep_obstacle_half_extent: float = config.obstacle_half_extent
+        self._ep_max_speed: float = config.max_speed
+        self._ep_max_turn_rate: float = config.max_turn_rate
+
     # ---------------------------------------------------------------- setup
 
     def _build_scene(self):
@@ -156,6 +162,29 @@ class World:
     # ------------------------------------------------------------ lifecycle
 
     def reset(self, np_random) -> None:
+        cfg = self.cfg
+        # Domain randomisation: sample per-episode dynamics / layout parameters.
+        if cfg.dr_num_obstacles is not None:
+            lo, hi = cfg.dr_num_obstacles
+            self._ep_num_obstacles = int(np_random.integers(lo, hi + 1))
+        else:
+            self._ep_num_obstacles = cfg.num_obstacles
+        if cfg.dr_obstacle_half_extent is not None:
+            lo_f, hi_f = cfg.dr_obstacle_half_extent
+            self._ep_obstacle_half_extent = float(np_random.uniform(lo_f, hi_f))
+        else:
+            self._ep_obstacle_half_extent = cfg.obstacle_half_extent
+        if cfg.dr_max_speed is not None:
+            lo_f, hi_f = cfg.dr_max_speed
+            self._ep_max_speed = float(np_random.uniform(lo_f, hi_f))
+        else:
+            self._ep_max_speed = cfg.max_speed
+        if cfg.dr_max_turn_rate is not None:
+            lo_f, hi_f = cfg.dr_max_turn_rate
+            self._ep_max_turn_rate = float(np_random.uniform(lo_f, hi_f))
+        else:
+            self._ep_max_turn_rate = cfg.max_turn_rate
+
         size = self.cfg.world_size * 0.8
         self.rover_pos = np_random.uniform(-size, size, size=2).astype(np.float32)
         self.rover_heading = float(np_random.uniform(-np.pi, np.pi))
@@ -177,12 +206,12 @@ class World:
                 node.removeNode()
         self.obstacle_nps = []
 
-        n = self.cfg.num_obstacles
+        n = self._ep_num_obstacles
         if n <= 0:
             self.obstacles_aabb = np.zeros((0, 4), dtype=np.float32)
             return
 
-        he = self.cfg.obstacle_half_extent
+        he = self._ep_obstacle_half_extent
         bound = self.cfg.world_size * 0.75
         placements: list[np.ndarray] = []
 
@@ -211,8 +240,8 @@ class World:
         self.obstacles_aabb = aabbs
 
     def apply_action(self, action: np.ndarray, dt: float) -> None:
-        forward = float(action[0]) * self.cfg.max_speed
-        turn = float(action[1]) * self.cfg.max_turn_rate
+        forward = float(action[0]) * self._ep_max_speed
+        turn = float(action[1]) * self._ep_max_turn_rate
 
         self.rover_heading += turn * dt
         self.rover_heading = (self.rover_heading + np.pi) % (2 * np.pi) - np.pi
@@ -265,6 +294,14 @@ class World:
 
     def goal_position(self) -> np.ndarray:
         return self.goal_pos.copy()
+
+    def ep_max_speed(self) -> float:
+        """Effective max speed for the current episode (may differ from cfg when DR is on)."""
+        return self._ep_max_speed
+
+    def ep_max_turn_rate(self) -> float:
+        """Effective max turn rate for the current episode (may differ from cfg when DR is on)."""
+        return self._ep_max_turn_rate
 
     def get_lidar(self) -> np.ndarray:
         """Return ``num_rays`` ray-cast distances fanning out from the rover."""

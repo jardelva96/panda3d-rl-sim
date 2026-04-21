@@ -131,4 +131,6 @@ class PandaNavEnv(gym.Env):
             "num_obstacles": self.world.num_obstacles(),
             "collided": self.world.is_collided(),
             "steps": self._steps,
+            "ep_max_speed": self.world.ep_max_speed(),
+            "ep_max_turn_rate": self.world.ep_max_turn_rate(),
         }

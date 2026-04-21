@@ -117,3 +117,63 @@ def test_empty_env_has_max_range_lidar(empty_env):
     lidar = obs[7:]
     cfg = EnvConfig()
     np.testing.assert_allclose(lidar, cfg.lidar_max_range)
+
+
+# ------------------------------------------------------------------ domain randomisation
+
+def test_dr_num_obstacles_varies():
+    """DR num_obstacles range should produce different counts across resets."""
+    cfg = EnvConfig(dr_num_obstacles=(1, 6))
+    env = gym.make("Panda3D-Nav-v0", config=cfg)
+    counts = {env.reset(seed=s)[1]["num_obstacles"] for s in range(20)}
+    env.close()
+    assert len(counts) > 1
+
+
+def test_dr_num_obstacles_respects_bounds():
+    """DR num_obstacles must never exceed the declared hi bound."""
+    cfg = EnvConfig(dr_num_obstacles=(2, 4))
+    env = gym.make("Panda3D-Nav-v0", config=cfg)
+    for s in range(20):
+        _, info = env.reset(seed=s)
+        assert 0 <= info["num_obstacles"] <= 4  # rejection sampling may give < 2
+    env.close()
+
+
+def test_dr_max_speed_varies():
+    """DR max_speed range should produce different dynamics across resets."""
+    cfg = EnvConfig(dr_max_speed=(1.0, 5.0))
+    env = gym.make("Panda3D-Nav-v0", config=cfg)
+    speeds = {round(env.reset(seed=s)[1]["ep_max_speed"], 3) for s in range(20)}
+    env.close()
+    assert len(speeds) > 1
+
+
+def test_dr_max_turn_rate_varies():
+    """DR max_turn_rate range should produce different dynamics across resets."""
+    cfg = EnvConfig(dr_max_turn_rate=(1.0, 4.0))
+    env = gym.make("Panda3D-Nav-v0", config=cfg)
+    rates = {round(env.reset(seed=s)[1]["ep_max_turn_rate"], 3) for s in range(20)}
+    env.close()
+    assert len(rates) > 1
+
+
+def test_dr_disabled_preserves_determinism():
+    """Without DR fields, same seed must still yield identical obs (regression guard)."""
+    env = gym.make("Panda3D-Nav-v0")
+    obs1, _ = env.reset(seed=77)
+    obs2, _ = env.reset(seed=77)
+    env.close()
+    np.testing.assert_allclose(obs1, obs2)
+
+
+def test_info_always_has_ep_fields():
+    """ep_max_speed and ep_max_turn_rate must be present in every info dict."""
+    env = gym.make("Panda3D-Nav-v0")
+    _, info = env.reset(seed=0)
+    assert "ep_max_speed" in info
+    assert "ep_max_turn_rate" in info
+    cfg = EnvConfig()
+    assert info["ep_max_speed"] == cfg.max_speed
+    assert info["ep_max_turn_rate"] == cfg.max_turn_rate
+    env.close()
