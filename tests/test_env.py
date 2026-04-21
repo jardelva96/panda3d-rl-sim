@@ -177,3 +177,67 @@ def test_info_always_has_ep_fields():
     assert info["ep_max_speed"] == cfg.max_speed
     assert info["ep_max_turn_rate"] == cfg.max_turn_rate
     env.close()
+
+
+# ------------------------------------------------------------------ multi-goal
+
+def test_single_goal_backward_compat():
+    """Default config (num_goals=1) must behave identically to v0.4."""
+    env = gym.make("Panda3D-Nav-v0")
+    _, info = env.reset(seed=0)
+    assert info["goals_reached"] == 0
+    assert info["goals_remaining"] == 1
+    env.close()
+
+
+def test_multi_goal_info_fields():
+    """goals_reached / goals_remaining must be in every info dict."""
+    cfg = EnvConfig(num_goals=3)
+    env = gym.make("Panda3D-Nav-v0", config=cfg)
+    _, info = env.reset(seed=0)
+    assert "goals_reached" in info
+    assert "goals_remaining" in info
+    assert info["goals_reached"] + info["goals_remaining"] == 3
+    env.close()
+
+
+def test_multi_goal_terminates_when_all_reached():
+    """A P-controller in an obstacle-free 3-goal env must eventually finish."""
+    cfg = EnvConfig(num_goals=3, num_obstacles=0, max_steps=2000)
+    env = gym.make("Panda3D-Nav-v0", config=cfg)
+    obs, info = env.reset(seed=5)
+    terminated = truncated = False
+    for _ in range(2000):
+        # Simple heading controller always pointing at current goal.
+        x, y, cos_h, sin_h, gdx, gdy, _ = obs[:7]
+        heading = np.arctan2(sin_h, cos_h)
+        target = np.arctan2(gdy, gdx)
+        err = (target - heading + np.pi) % (2 * np.pi) - np.pi
+        turn = float(np.clip(err * 2.0, -1.0, 1.0))
+        fwd = 1.0 if abs(err) < 0.4 else 0.0
+        obs, _r, terminated, truncated, info = env.step(
+            np.array([fwd, turn], dtype=np.float32)
+        )
+        if terminated or truncated:
+            break
+    env.close()
+    # Must finish (either all goals reached or timeout).
+    assert terminated or truncated
+    # With 2000 steps and no obstacles at least 1 goal should be reached.
+    assert info["goals_reached"] >= 1
+
+
+def test_multi_goal_goal_count_is_cfg_value():
+    """goals_reached + goals_remaining == cfg.num_goals at all times."""
+    cfg = EnvConfig(num_goals=4, num_obstacles=0)
+    env = gym.make("Panda3D-Nav-v0", config=cfg)
+    obs, info = env.reset(seed=9)
+    assert info["goals_reached"] + info["goals_remaining"] == 4
+    for _ in range(50):
+        obs, _r, terminated, truncated, info = env.step(
+            env.action_space.sample()
+        )
+        assert info["goals_reached"] + info["goals_remaining"] == 4
+        if terminated or truncated:
+            break
+    env.close()

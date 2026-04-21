@@ -108,7 +108,10 @@ class World:
 
         self.rover_pos = np.zeros(2, dtype=np.float32)
         self.rover_heading = 0.0
-        self.goal_pos = np.zeros(2, dtype=np.float32)
+        self.goal_pos = np.zeros(2, dtype=np.float32)  # current goal (alias into goals list)
+        self.goals: list[np.ndarray] = []              # all goals for this episode
+        self.goal_index: int = 0                        # which goal is active
+        self.goal_nps: list = []                        # scene nodes (one per goal)
         self.obstacle_nps: list = []
         self.obstacles_aabb = np.zeros((0, 4), dtype=np.float32)
 
@@ -140,8 +143,8 @@ class World:
         self.rover_np = _make_box(root, 0.4, (0.90, 0.20, 0.20, 1), "rover")
         self.rover_np.setZ(0.4)
 
-        self.goal_np = _make_box(root, 0.3, (0.20, 0.90, 0.20, 1), "goal")
-        self.goal_np.setZ(0.3)
+        # Goal nodes are created dynamically in reset(); no static goal_np.
+        self.goal_nps: list = []
 
         alight = AmbientLight("ambient")
         alight.setColor(Vec4(0.4, 0.4, 0.45, 1))
@@ -189,15 +192,50 @@ class World:
         self.rover_pos = np_random.uniform(-size, size, size=2).astype(np.float32)
         self.rover_heading = float(np_random.uniform(-np.pi, np.pi))
 
-        goal = np_random.uniform(-size, size, size=2).astype(np.float32)
-        for _ in range(32):
-            if np.linalg.norm(goal - self.rover_pos) >= self.cfg.min_goal_distance:
-                break
-            goal = np_random.uniform(-size, size, size=2).astype(np.float32)
-        self.goal_pos = goal
+        self._spawn_goals(np_random)
+        self.goal_index = 0
+        self.goal_pos = self.goals[0]
 
         self._spawn_obstacles(np_random)
         self._sync_scene()
+
+    def _spawn_goals(self, np_random) -> None:
+        """Place ``cfg.num_goals`` goals with separation constraints."""
+        for node in self.goal_nps:
+            with contextlib.suppress(Exception):
+                node.removeNode()
+        self.goal_nps = []
+        self.goals = []
+
+        size = self.cfg.world_size * 0.8
+        n = max(1, self.cfg.num_goals)
+        for _ in range(n):
+            for _attempt in range(64):
+                g = np_random.uniform(-size, size, size=2).astype(np.float32)
+                if np.linalg.norm(g - self.rover_pos) < self.cfg.min_goal_distance:
+                    continue
+                if any(
+                    np.linalg.norm(g - prev) < self.cfg.min_goal_separation
+                    for prev in self.goals
+                ):
+                    continue
+                self.goals.append(g)
+                break
+            else:
+                # Fallback: relax separation constraint
+                g = np_random.uniform(-size, size, size=2).astype(np.float32)
+                self.goals.append(g)
+
+            # Dim colour for future goals, bright for first
+            alpha = 1.0 if len(self.goals) == 1 else 0.45
+            node = _make_box(
+                self.base.render, 0.3,
+                (0.20 * alpha, 0.90 * alpha, 0.20 * alpha, 1),
+                f"goal_{len(self.goals) - 1}",
+            )
+            gp = self.goals[-1]
+            node.setPos(float(gp[0]), float(gp[1]), 0.3)
+            self.goal_nps.append(node)
 
     def _spawn_obstacles(self, np_random) -> None:
         # Tear down any obstacles left over from a previous episode.
@@ -224,7 +262,10 @@ class World:
                 p = np_random.uniform(-bound, bound, size=2).astype(np.float32)
                 if np.linalg.norm(p - self.rover_pos) < min_clearance_rover:
                     continue
-                if np.linalg.norm(p - self.goal_pos) < min_clearance_goal:
+                if any(
+                    np.linalg.norm(p - g) < min_clearance_goal
+                    for g in self.goals
+                ):
                     continue
                 if any(np.linalg.norm(p - q) < min_clearance_pair for q in placements):
                     continue
@@ -254,13 +295,15 @@ class World:
             self.base.graphicsEngine.renderFrame()
 
     def close(self) -> None:
-        # Leave the ShowBase singleton alive — tearing it down reliably in the
-        # same process is brittle. Just drop our scene nodes.
         for node in self.obstacle_nps:
             with contextlib.suppress(Exception):
                 node.removeNode()
         self.obstacle_nps = []
-        for attr in ("rover_np", "goal_np", "ground_np", "_ambient_np", "_sun_np"):
+        for node in self.goal_nps:
+            with contextlib.suppress(Exception):
+                node.removeNode()
+        self.goal_nps = []
+        for attr in ("rover_np", "ground_np", "_ambient_np", "_sun_np"):
             node = getattr(self, attr, None)
             if node is not None:
                 with contextlib.suppress(Exception):
@@ -270,6 +313,34 @@ class World:
 
     def distance_to_goal(self) -> float:
         return float(np.linalg.norm(self.rover_pos - self.goal_pos))
+
+    def advance_goal(self) -> bool:
+        """Mark current goal reached and advance to the next one.
+
+        Returns
+        -------
+        bool
+            ``True`` when all goals have been reached (episode should end).
+        """
+        # Fade the reached goal node so the player can see progress.
+        if self.needs_graphics and self.goal_index < len(self.goal_nps):
+            self.goal_nps[self.goal_index].setColor(0.15, 0.55, 0.15, 1)
+
+        self.goal_index += 1
+        if self.goal_index >= len(self.goals):
+            return True  # all goals reached
+
+        self.goal_pos = self.goals[self.goal_index]
+        # Brighten the next active goal node.
+        if self.needs_graphics and self.goal_index < len(self.goal_nps):
+            self.goal_nps[self.goal_index].setColor(0.20, 0.90, 0.20, 1)
+        return False
+
+    def goals_remaining(self) -> int:
+        return len(self.goals) - self.goal_index
+
+    def goals_reached(self) -> int:
+        return self.goal_index
 
     def is_out_of_bounds(self) -> bool:
         return bool(np.any(np.abs(self.rover_pos) > self.cfg.world_size))
@@ -294,6 +365,10 @@ class World:
 
     def goal_position(self) -> np.ndarray:
         return self.goal_pos.copy()
+
+    def all_goal_positions(self) -> list[np.ndarray]:
+        """Positions of every goal (reached and pending) for this episode."""
+        return [g.copy() for g in self.goals]
 
     def ep_max_speed(self) -> float:
         """Effective max speed for the current episode (may differ from cfg when DR is on)."""
@@ -357,7 +432,7 @@ class World:
     def _sync_scene(self) -> None:
         self.rover_np.setPos(float(self.rover_pos[0]), float(self.rover_pos[1]), 0.4)
         self.rover_np.setH(float(np.degrees(self.rover_heading)))
-        self.goal_np.setPos(float(self.goal_pos[0]), float(self.goal_pos[1]), 0.3)
+        # goal_nps are positioned in _spawn_goals; active goal pos synced via goal_pos reference.
 
     def num_obstacles(self) -> int:
         return int(self.obstacles_aabb.shape[0])

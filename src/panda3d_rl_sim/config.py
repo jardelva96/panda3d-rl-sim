@@ -31,6 +31,14 @@ class EnvConfig:
     lidar_fov_rad: float = math.pi  # 180°
     lidar_max_range: float = 10.0
 
+    # Multi-goal sequential navigation
+    # num_goals=1 is equivalent to the classic single-goal task.
+    # Goals are visited in random order; each reached goal grants reward_goal
+    # and advances goal_index.  Episode terminates when all goals are reached
+    # OR on collision / out-of-bounds / timeout.
+    num_goals: int = 1
+    min_goal_separation: float = 2.0  # minimum distance between any two goals
+
     # Rewards
     reward_goal: float = 10.0
     reward_out_of_bounds: float = -5.0

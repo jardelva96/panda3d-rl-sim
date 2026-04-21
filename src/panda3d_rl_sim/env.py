@@ -55,7 +55,8 @@ class PandaNavEnv(gym.Env):
             low=-1.0, high=1.0, shape=(2,), dtype=np.float32
         )
         if observation_mode == "state":
-            # 7 pose+goal features, followed by num_rays LIDAR distances.
+            # 7 pose+goal features + num_rays LIDAR distances.
+            # The goal vector always points to the *current* active goal.
             obs_dim = 7 + max(0, self.cfg.num_rays)
             self.observation_space = spaces.Box(
                 low=-np.inf, high=np.inf, shape=(obs_dim,), dtype=np.float32
@@ -99,14 +100,19 @@ class PandaNavEnv(gym.Env):
         self._steps += 1
         timeout = self._steps >= self.cfg.max_steps
 
+        all_goals_done = False
         if reached:
             reward += self.cfg.reward_goal
+            all_goals_done = self.world.advance_goal()
+            if not all_goals_done:
+                # Reset shaping baseline to the next goal's distance.
+                self._prev_dist = self.world.distance_to_goal()
         if out_of_bounds:
             reward += self.cfg.reward_out_of_bounds
         if collided:
             reward += self.cfg.reward_collision
 
-        terminated = bool(reached or out_of_bounds or collided)
+        terminated = bool(all_goals_done or out_of_bounds or collided)
         truncated = bool(timeout and not terminated)
         return self._get_obs(), reward, terminated, truncated, self._info()
 
@@ -133,4 +139,6 @@ class PandaNavEnv(gym.Env):
             "steps": self._steps,
             "ep_max_speed": self.world.ep_max_speed(),
             "ep_max_turn_rate": self.world.ep_max_turn_rate(),
+            "goals_reached": self.world.goals_reached(),
+            "goals_remaining": self.world.goals_remaining(),
         }

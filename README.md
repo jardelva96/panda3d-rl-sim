@@ -195,7 +195,7 @@ See [cpp/README.md](cpp/README.md) for details.
 - [x] Procedurally placed obstacles and AABB collision termination
 - [x] LIDAR-like range sensor with optional C++ backend
 - [ ] Bullet-backed rigid-body dynamics (slopes, friction, dynamic bodies)
-- [ ] Multi-goal and procedurally generated room layouts
+- [x] Multi-goal sequential navigation (`num_goals=N`; backward-compatible with single-goal default)
 - [x] Domain randomization hooks (num_obstacles, obstacle size, max_speed, max_turn_rate)
 - [ ] Vectorized `AsyncVectorEnv` support for parallel rollouts
 - [ ] Depth and segmentation sensor outputs
