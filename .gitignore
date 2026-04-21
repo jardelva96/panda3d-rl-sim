@@ -38,3 +38,7 @@ cpp/_build/
 *.log
 *.mp4
 *.gif
+
+# Training logs / tensorboard — keep checkpoints, drop scratch
+examples/checkpoints/logs/
+examples/checkpoints/training.log

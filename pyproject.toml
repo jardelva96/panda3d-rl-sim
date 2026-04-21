@@ -36,6 +36,10 @@ dev = [
 examples = [
     "imageio>=2.30",
 ]
+train = [
+    "stable-baselines3>=2.3",
+    "tensorboard>=2.15",
+]
 
 [project.urls]
 Homepage = "https://github.com/jardelva96/panda3d-rl-sim"
