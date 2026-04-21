@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 
@@ -15,14 +16,25 @@ class EnvConfig:
     # Rover dynamics
     max_speed: float = 3.0
     max_turn_rate: float = 2.5  # rad/s
+    rover_half_extent: float = 0.4
 
     # Simulation
     dt: float = 1.0 / 20.0
     max_steps: int = 300
 
+    # Obstacles (axis-aligned boxes scattered on the plane)
+    num_obstacles: int = 4
+    obstacle_half_extent: float = 0.5
+
+    # LIDAR-like range sensor: fan of rays anchored to the rover's heading
+    num_rays: int = 16
+    lidar_fov_rad: float = math.pi  # 180°
+    lidar_max_range: float = 10.0
+
     # Rewards
     reward_goal: float = 10.0
     reward_out_of_bounds: float = -5.0
+    reward_collision: float = -5.0
     reward_step_penalty: float = -0.01
 
     # Pixel observation / rgb_array render

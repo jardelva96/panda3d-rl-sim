@@ -43,12 +43,33 @@ observation capture, reward shaping, and termination.
 
 | Mode | Shape | Use case |
 |------|-------|----------|
-| `state`  | `Box(7,)` float32 | Fast training, classical RL |
-| `pixels` | `Box(H, W, 3)` uint8 | Vision-based RL, multimodal agents |
+| `state`  | `Box(7 + num_rays,)` float32 | Fast training, classical RL |
+| `pixels` | `Box(H, W, 3)` uint8         | Vision-based RL, multimodal agents |
+
+The `state` vector concatenates two blocks:
+
+1. **Pose + goal** (7 floats): `[x, y, cos(h), sin(h), goal_dx, goal_dy, distance]`
+2. **LIDAR fan** (`num_rays` floats): the distance to the nearest obstacle
+   hit along each of `num_rays` rays spread evenly across `lidar_fov_rad`
+   and anchored to the rover's heading. A ray that hits nothing reports
+   `lidar_max_range`.
 
 `pixels` observations are captured from an offscreen Panda3D camera using
 `Texture.getRamImageAs("RGB")`, so they cost no display and work on CI
 workers or remote servers.
+
+### Sensors and the C++ backend
+
+The LIDAR fan is computed with a 2-D axis-aligned-box ray caster. The module
+`panda3d_rl_sim.sensors` ships two interchangeable implementations:
+
+- `ray_cast_aabb` — pure NumPy, used by default and always available;
+- `ray_cast_aabb_fast` — same signature, but dispatches to the compiled
+  C++ extension in [`cpp/`](cpp/) when it is importable, and falls back to
+  the Python implementation otherwise.
+
+Call `panda3d_rl_sim.sensors.cpp_backend_available()` to see which backend
+is active at runtime.
 
 ### Render modes
 
@@ -132,12 +153,14 @@ See [cpp/README.md](cpp/README.md) for details.
 
 ## Roadmap
 
-- Bullet-backed rigid-body dynamics (collisions, slopes, obstacles)
-- Multi-goal and procedurally generated layouts
-- Domain randomization hooks (textures, lighting, mass, friction)
-- Vectorized `AsyncVectorEnv` support for parallel rollouts
-- Depth and segmentation sensor outputs
-- Example Stable-Baselines3 PPO training config and pre-trained checkpoint
+- [x] Procedurally placed obstacles and AABB collision termination
+- [x] LIDAR-like range sensor with optional C++ backend
+- [ ] Bullet-backed rigid-body dynamics (slopes, friction, dynamic bodies)
+- [ ] Multi-goal and procedurally generated room layouts
+- [ ] Domain randomization hooks (textures, lighting, mass, friction)
+- [ ] Vectorized `AsyncVectorEnv` support for parallel rollouts
+- [ ] Depth and segmentation sensor outputs
+- [ ] Example Stable-Baselines3 PPO training config and pre-trained checkpoint
 
 ## License
 

@@ -55,8 +55,10 @@ class PandaNavEnv(gym.Env):
             low=-1.0, high=1.0, shape=(2,), dtype=np.float32
         )
         if observation_mode == "state":
+            # 7 pose+goal features, followed by num_rays LIDAR distances.
+            obs_dim = 7 + max(0, self.cfg.num_rays)
             self.observation_space = spaces.Box(
-                low=-np.inf, high=np.inf, shape=(7,), dtype=np.float32
+                low=-np.inf, high=np.inf, shape=(obs_dim,), dtype=np.float32
             )
         else:
             self.observation_space = spaces.Box(
@@ -93,6 +95,7 @@ class PandaNavEnv(gym.Env):
         reward = float(shaping + self.cfg.reward_step_penalty)
         reached = dist < self.cfg.goal_radius
         out_of_bounds = self.world.is_out_of_bounds()
+        collided = self.world.is_collided()
         self._steps += 1
         timeout = self._steps >= self.cfg.max_steps
 
@@ -100,8 +103,10 @@ class PandaNavEnv(gym.Env):
             reward += self.cfg.reward_goal
         if out_of_bounds:
             reward += self.cfg.reward_out_of_bounds
+        if collided:
+            reward += self.cfg.reward_collision
 
-        terminated = bool(reached or out_of_bounds)
+        terminated = bool(reached or out_of_bounds or collided)
         truncated = bool(timeout and not terminated)
         return self._get_obs(), reward, terminated, truncated, self._info()
 
@@ -123,5 +128,7 @@ class PandaNavEnv(gym.Env):
             "distance_to_goal": self.world.distance_to_goal(),
             "rover_pos": self.world.rover_position(),
             "goal_pos": self.world.goal_position(),
+            "num_obstacles": self.world.num_obstacles(),
+            "collided": self.world.is_collided(),
             "steps": self._steps,
         }

@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import numpy as np
 
-from panda3d_rl_sim.sensors import ray_cast_aabb
+from panda3d_rl_sim.sensors import (
+    cpp_backend_available,
+    ray_cast_aabb,
+    ray_cast_aabb_fast,
+)
 
 
 def test_empty_scene_returns_max_range():
@@ -60,3 +64,26 @@ def test_fan_of_rays_shape():
     assert out.shape == (16,)
     # At least one ray in the middle of the fan should hit
     assert float(out.min()) < 5.0
+
+
+def test_fast_backend_agrees_with_python():
+    """The auto-selected backend must produce the same distances as the
+    reference Python implementation (identity holds trivially when C++ is
+    not built, and up to float rounding when it is)."""
+    rng = np.random.default_rng(0)
+    origin = rng.uniform(-2, 2, size=2).astype(np.float32)
+    obstacles = np.array(
+        [
+            [1.0, -1.0, 2.0, 1.0],
+            [-3.0, 0.0, -1.0, 2.0],
+            [0.0, 2.0, 3.0, 3.0],
+        ],
+        dtype=np.float32,
+    )
+    a = ray_cast_aabb(origin, 0.3, 32, np.pi, 8.0, obstacles)
+    b = ray_cast_aabb_fast(origin, 0.3, 32, np.pi, 8.0, obstacles)
+    np.testing.assert_allclose(a, b, atol=1e-4)
+
+
+def test_cpp_backend_flag_is_boolean():
+    assert isinstance(cpp_backend_available(), bool)

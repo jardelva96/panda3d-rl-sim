@@ -91,3 +91,44 @@ def _ray_aabb(ox, oy, dx, dy, x_min, y_min, x_max, y_max, best):
         if tmin > tmax:
             return best
     return tmin if tmin > 0 else best
+
+
+# ---------------------------------------------------------- backend selection
+#
+# ``ray_cast_aabb_fast`` is the recommended entry point for hot paths: it uses
+# the compiled C++ extension when it is importable, and falls back to the pure
+# Python implementation otherwise. The two implementations produce identical
+# results up to float rounding, so they are drop-in interchangeable.
+
+try:
+    from _raycaster import ray_cast_aabb as _cpp_ray_cast_aabb  # type: ignore[import-not-found]
+
+    def ray_cast_aabb_fast(
+        origin: np.ndarray,
+        heading: float,
+        num_rays: int,
+        fov_rad: float,
+        max_range: float,
+        obstacles: np.ndarray,
+    ) -> np.ndarray:
+        obstacles = np.asarray(obstacles, dtype=np.float32)
+        if obstacles.ndim == 1 and obstacles.size == 0:
+            obstacles = obstacles.reshape(0, 4)
+        return _cpp_ray_cast_aabb(
+            np.asarray(origin, dtype=np.float32),
+            float(heading),
+            int(num_rays),
+            float(fov_rad),
+            float(max_range),
+            obstacles,
+        )
+
+    _CPP_BACKEND = True
+except ImportError:
+    ray_cast_aabb_fast = ray_cast_aabb
+    _CPP_BACKEND = False
+
+
+def cpp_backend_available() -> bool:
+    """True iff the compiled C++ ray-caster is importable on this interpreter."""
+    return _CPP_BACKEND

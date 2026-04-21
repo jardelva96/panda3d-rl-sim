@@ -109,6 +109,8 @@ class World:
         self.rover_pos = np.zeros(2, dtype=np.float32)
         self.rover_heading = 0.0
         self.goal_pos = np.zeros(2, dtype=np.float32)
+        self.obstacle_nps: list = []
+        self.obstacles_aabb = np.zeros((0, 4), dtype=np.float32)
 
     # ---------------------------------------------------------------- setup
 
@@ -164,7 +166,49 @@ class World:
                 break
             goal = np_random.uniform(-size, size, size=2).astype(np.float32)
         self.goal_pos = goal
+
+        self._spawn_obstacles(np_random)
         self._sync_scene()
+
+    def _spawn_obstacles(self, np_random) -> None:
+        # Tear down any obstacles left over from a previous episode.
+        for node in self.obstacle_nps:
+            with contextlib.suppress(Exception):
+                node.removeNode()
+        self.obstacle_nps = []
+
+        n = self.cfg.num_obstacles
+        if n <= 0:
+            self.obstacles_aabb = np.zeros((0, 4), dtype=np.float32)
+            return
+
+        he = self.cfg.obstacle_half_extent
+        bound = self.cfg.world_size * 0.75
+        placements: list[np.ndarray] = []
+
+        min_clearance_rover = self.cfg.rover_half_extent + he + 0.5
+        min_clearance_goal = self.cfg.goal_radius + he + 0.3
+        min_clearance_pair = 2.0 * he + 0.3
+
+        for _ in range(n):
+            for _attempt in range(32):
+                p = np_random.uniform(-bound, bound, size=2).astype(np.float32)
+                if np.linalg.norm(p - self.rover_pos) < min_clearance_rover:
+                    continue
+                if np.linalg.norm(p - self.goal_pos) < min_clearance_goal:
+                    continue
+                if any(np.linalg.norm(p - q) < min_clearance_pair for q in placements):
+                    continue
+                placements.append(p)
+                break
+
+        aabbs = np.empty((len(placements), 4), dtype=np.float32)
+        for i, p in enumerate(placements):
+            aabbs[i] = (p[0] - he, p[1] - he, p[0] + he, p[1] + he)
+            node = _make_box(self.base.render, he, (0.45, 0.45, 0.55, 1), f"obstacle_{i}")
+            node.setPos(float(p[0]), float(p[1]), he)
+            self.obstacle_nps.append(node)
+        self.obstacles_aabb = aabbs
 
     def apply_action(self, action: np.ndarray, dt: float) -> None:
         forward = float(action[0]) * self.cfg.max_speed
@@ -183,6 +227,10 @@ class World:
     def close(self) -> None:
         # Leave the ShowBase singleton alive — tearing it down reliably in the
         # same process is brittle. Just drop our scene nodes.
+        for node in self.obstacle_nps:
+            with contextlib.suppress(Exception):
+                node.removeNode()
+        self.obstacle_nps = []
         for attr in ("rover_np", "goal_np", "ground_np", "_ambient_np", "_sun_np"):
             node = getattr(self, attr, None)
             if node is not None:
@@ -197,15 +245,43 @@ class World:
     def is_out_of_bounds(self) -> bool:
         return bool(np.any(np.abs(self.rover_pos) > self.cfg.world_size))
 
+    def is_collided(self) -> bool:
+        """AABB overlap test between the rover and every obstacle."""
+        if self.obstacles_aabb.size == 0:
+            return False
+        he = self.cfg.rover_half_extent
+        rx, ry = self.rover_pos[0], self.rover_pos[1]
+        obs = self.obstacles_aabb
+        overlap = (
+            (rx + he > obs[:, 0])
+            & (rx - he < obs[:, 2])
+            & (ry + he > obs[:, 1])
+            & (ry - he < obs[:, 3])
+        )
+        return bool(overlap.any())
+
     def rover_position(self) -> np.ndarray:
         return self.rover_pos.copy()
 
     def goal_position(self) -> np.ndarray:
         return self.goal_pos.copy()
 
+    def get_lidar(self) -> np.ndarray:
+        """Return ``num_rays`` ray-cast distances fanning out from the rover."""
+        from .sensors import ray_cast_aabb_fast
+
+        return ray_cast_aabb_fast(
+            origin=self.rover_pos,
+            heading=self.rover_heading,
+            num_rays=self.cfg.num_rays,
+            fov_rad=self.cfg.lidar_fov_rad,
+            max_range=self.cfg.lidar_max_range,
+            obstacles=self.obstacles_aabb,
+        )
+
     def get_state_vector(self) -> np.ndarray:
         delta = self.goal_pos - self.rover_pos
-        return np.array(
+        base = np.array(
             [
                 self.rover_pos[0],
                 self.rover_pos[1],
@@ -217,6 +293,9 @@ class World:
             ],
             dtype=np.float32,
         )
+        if self.cfg.num_rays <= 0:
+            return base
+        return np.concatenate([base, self.get_lidar().astype(np.float32)])
 
     def get_camera_image(self) -> np.ndarray:
         if not self.needs_graphics or self.base.win is None:
@@ -242,6 +321,9 @@ class World:
         self.rover_np.setPos(float(self.rover_pos[0]), float(self.rover_pos[1]), 0.4)
         self.rover_np.setH(float(np.degrees(self.rover_heading)))
         self.goal_np.setPos(float(self.goal_pos[0]), float(self.goal_pos[1]), 0.3)
+
+    def num_obstacles(self) -> int:
+        return int(self.obstacles_aabb.shape[0])
 
 
 def _resize_nearest(img: np.ndarray, w: int, h: int) -> np.ndarray:
